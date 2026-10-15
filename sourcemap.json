@@ -1,0 +1,1 @@
+{"name":"telekenisis","className":"DataModel","filePaths":["default.project.json"],"children":[{"name":"StarterPlayer","className":"StarterPlayer","children":[{"name":"StarterCharacterScripts","className":"LocalScript","filePaths":["src\\init.client.luau"]}]}]}
