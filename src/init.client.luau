@@ -33,13 +33,18 @@ local CONFIG = {
 
 local BINDS = {
     -- Start a new grip
-    grip = { Enum.UserInputType.MouseButton1, Enum.KeyCode.ButtonX }
+    grip = { Enum.KeyCode.E, Enum.KeyCode.ButtonX },
+    move = { Enum.UserInputType.MouseButton1, Enum.KeyCode.ButtonR2 }
 }
 
 --#endregion
 
 --[[ CONSTANTS ]]--
 --#region
+
+local GrippableObjects = workspace.Grippable :: Folder & { [string]: BasePart }
+local CollidableObjects = workspace.Collidable :: Folder & { [string]: BasePart }
+local DebrisObjects = workspace.Debris :: Folder & { [string]: BasePart }
 
 local Camera = workspace.CurrentCamera
 
@@ -81,18 +86,40 @@ end
 local active_grips = {}
 local grip = {}
 
-function grip.new(obj: BasePart)
+function grip.new(root: BasePart, obj: BasePart)
+    -- Generate attachments & constraint
+    local baseAtt = Instance.new("Attachment", obj)
+    local targetAtt = Instance.new("Attachment", workspace.Terrain)
+    local alignPos = Instance.new("AlignPosition")
+
+    alignPos.Attachment0, alignPos.Attachment1 =
+        baseAtt, targetAtt
+
+    -- Compile grip object
+    local diff = root.Position - obj.Position
     local this = {
-        object = obj
+        object = obj,
+        root = root,
+
+        dist = diff.Magnitude,
+        dir = diff.Unit,
+
+        att = {baseAtt, targetAtt},
+        align = alignPos
     }
 
+    obj:AddTag("Gripped")
     active_grips[obj] = this
     return this
 end
 
 function grip.has(obj: BasePart)
     return active_grips[obj] ~= nil; end
+function grip.get(obj: BasePart)
+    return active_grips[obj]; end
+
 function grip.release(obj: BasePart)
+    obj:RemoveTag("Gripped")
     active_grips[obj] = nil; end
 
 --#endregion
@@ -103,13 +130,15 @@ function grip.release(obj: BasePart)
 --[ Initialization ]--
 --#region
 
+local dragging
+
 --#endregion
 
 --[ Inputs ]--
 --#region
 
 -- Table including logic for each input, "pressed" & "released" events.
-local actions = {
+local actions: {[keyof<typeof(BINDS)>]: {pressed: (() -> ())?, released: (() -> ())?}} = {
     grip = { 
         pressed = function()
             if #active_grips>=CONFIG.grip.maximum then
@@ -125,6 +154,21 @@ local actions = {
             else
                 grip.new(aimObj)
             end
+        end
+    },
+
+    move = {
+        pressed = function()
+            local aimRay = getAimRay()
+            local aimCast = workspace:Raycast(aimRay.Origin, aimRay.Direction, GripCastParams)
+            if not aimCast then return end
+
+            local aimObj = aimCast.Instance
+            dragging = grip.get(aimObj)
+        end,
+
+        released = function()
+            dragging = nil
         end
     }
 }
@@ -165,7 +209,12 @@ local input_connections = {
 --#region
 
 local runtime = RunService.RenderStepped:Connect(function()
+    for obj, grip in active_grips do
+        local root_cf = grip.root.CFrame
+        local offset_pos = root_cf + (grip.dir*grip.dist)
 
+        grip.att[2].WorldCFrame = offset_pos
+    end
 end)
 
 --#endregion
