@@ -27,7 +27,8 @@ local CONFIG = {
         -- Maximum amount of objects that can be gripped at once.
         maximum = 4,
 
-
+        -- How many studs away an object can be gripped from.
+        distance = 100
     }
 }
 
@@ -89,11 +90,11 @@ local grip = {}
 function grip.new(root: BasePart, obj: BasePart)
     -- Generate attachments & constraint
     local baseAtt = Instance.new("Attachment", obj)
-    local targetAtt = Instance.new("Attachment", DebrisObjects)
 
     local alignPos = Instance.new("AlignPosition", obj)
-    alignPos.Attachment0, alignPos.Attachment1 =
-        baseAtt, targetAtt
+    alignPos.ApplyAtCenterOfMass = true
+    alignPos.Mode = Enum.PositionAlignmentMode.OneAttachment
+    alignPos.Attachment0 = baseAtt
 
     -- Compile grip object
     local diff = root.Position - obj.Position
@@ -104,7 +105,7 @@ function grip.new(root: BasePart, obj: BasePart)
         dist = diff.Magnitude,
         dir = diff.Unit,
 
-        att = {baseAtt, targetAtt},
+        att = {baseAtt},
         align = alignPos
     }
 
@@ -119,8 +120,19 @@ function grip.get(obj: BasePart)
     return active_grips[obj]; end
 
 function grip.release(obj: BasePart)
+    -- Get grip_obj
+    local grip_obj = grip.get(obj)
+    if not grip_obj then return end
+    
+    -- Destroy instances & cleanup
+    grip_obj.align:Destroy()
+    for _, att in grip_obj.att do
+        att:Destroy()
+    end
+
     obj:RemoveTag("Gripped")
-    active_grips[obj] = nil; end
+    active_grips[obj] = nil
+end
 
 --#endregion
 
@@ -139,28 +151,30 @@ local dragging
 
 -- Table including logic for each input, "pressed" & "released" events.
 local actions: {[keyof<typeof(BINDS)>]: {pressed: (() -> ())?, released: (() -> ())?}} = {
-    grip = { 
+    ["grip"] = { 
         pressed = function()
             if #active_grips>=CONFIG.grip.maximum then
                 return end
 
             local aimRay = getAimRay() -- Generates a ray object based on platform (MKB or Console/Mobile)
-            local aimCast = workspace:Raycast(aimRay.Origin, aimRay.Direction, GripCastParams)
+            local aimCast = workspace:Raycast(aimRay.Origin, aimRay.Direction*CONFIG.grip.distance, GripCastParams)
             if not aimCast then return end
 
             local aimObj = aimCast.Instance
             if grip.has(aimObj) then
                 grip.release(aimObj)
+                print("Grip released")
             else
-                grip.new(aimObj)
+                grip.new(Humanoid.RootPart, aimObj)
+                print(`New grip made`)
             end
         end
     },
 
-    move = {
+    ["move"] = {
         pressed = function()
             local aimRay = getAimRay()
-            local aimCast = workspace:Raycast(aimRay.Origin, aimRay.Direction, GripCastParams)
+            local aimCast = workspace:Raycast(aimRay.Origin, aimRay.Direction*CONFIG.grip.distance, GripCastParams)
             if not aimCast then return end
 
             local aimObj = aimCast.Instance
@@ -179,7 +193,7 @@ local pressed, released = {}, {}
 for name, inputs in BINDS do
     for _, input in inputs do
         assert(not pressed[input] and not released[input], `Keybind {name} has a conflicting keybind "{input.Name}!" Please ensure bindings do not overlap.`)
-        
+            
         pressed[input]  = actions[name].pressed
         released[input] = actions[name].released
     end
@@ -213,7 +227,7 @@ local runtime = RunService.RenderStepped:Connect(function()
         local root_cf = grip.root.CFrame
         local offset_pos = root_cf + (grip.dir*grip.dist)
 
-        grip.att[2].WorldCFrame = offset_pos
+        grip.align.Position = offset_pos.Position
     end
 end)
 
