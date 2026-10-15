@@ -55,11 +55,11 @@ local Humanoid: Humanoid = Character:FindFirstChildWhichIsA("Humanoid") or Chara
 
 -- RayCast Parameters
 local GripCastParams = RaycastParams.new()
-GripCastParams.CollisionGroup = { workspace.Grippable }
+GripCastParams.FilterDescendantsInstances = { GrippableObjects }
 GripCastParams.FilterType = Enum.RaycastFilterType.Include
 
 local WorldCastParams = RaycastParams.new()
-WorldCastParams.CollisionGroup = { workspace.Collidable }
+WorldCastParams.FilterDescendantsInstances = { CollidableObjects }
 WorldCastParams.FilterType = Enum.RaycastFilterType.Include
 
 --#endregion
