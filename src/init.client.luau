@@ -7,7 +7,6 @@
 
 local UserInputService = game:GetService("UserInputService")
 
-local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
 
 local Players = game:GetService("Players")
@@ -165,7 +164,30 @@ local input_connections = {
 --[ Runtime ]--
 --#region
 
+local runtime = RunService.RenderStepped:Connect(function()
 
+end)
+
+--#endregion
+
+--[ Cleanup ]--
+--#region
+
+Humanoid.Died:Once(function()
+    -- Cleanup grip objects to free all grips
+    for obj in active_grips do
+        grip.release(obj)
+    end
+
+    -- Cleanup inputs to avoid new logic being handled
+    for i, conn in input_connections do
+        conn:Disconnect()
+        input_connections[i] = nil
+    end
+
+    -- Finally cleanup runtime to prevent errors
+    runtime:Disconnect(); runtime = nil
+end)
 
 --#endregion
 
