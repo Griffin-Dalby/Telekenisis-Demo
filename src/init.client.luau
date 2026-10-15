@@ -89,9 +89,9 @@ local grip = {}
 function grip.new(root: BasePart, obj: BasePart)
     -- Generate attachments & constraint
     local baseAtt = Instance.new("Attachment", obj)
-    local targetAtt = Instance.new("Attachment", workspace.Terrain)
-    local alignPos = Instance.new("AlignPosition")
+    local targetAtt = Instance.new("Attachment", DebrisObjects)
 
+    local alignPos = Instance.new("AlignPosition", obj)
     alignPos.Attachment0, alignPos.Attachment1 =
         baseAtt, targetAtt
 
