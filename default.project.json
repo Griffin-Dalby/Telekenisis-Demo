@@ -5,7 +5,7 @@
 
     "StarterPlayer": {
       "StarterCharacterScripts": {
-        "$path": "src/"
+        "Telekenisis": {"$path": "src/"}
       }
     }
   }
