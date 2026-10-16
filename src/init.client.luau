@@ -5,6 +5,7 @@
 --[[ SERVICES ]]--
 --#region
 
+local ContextActionService = game:GetService("ContextActionService")
 local UserInputService = game:GetService("UserInputService")
 
 local RunService = game:GetService("RunService")
@@ -28,6 +29,10 @@ local CONFIG = {
         maximum = 4,
 
         -- How many studs away an object can be gripped from.
+        distance = 100,
+
+        -- Determines how sensitive the drag mechanic is. (studs/pixel)
+        sensitivity = .005
     },
 
     debug = {
@@ -41,7 +46,12 @@ local CONFIG = {
 local BINDS = {
     -- Start a new grip
     grip = { Enum.KeyCode.E, Enum.KeyCode.ButtonX },
-    move = { Enum.UserInputType.MouseButton1, Enum.KeyCode.ButtonR2 }
+
+    -- Moves a telepathic grip
+    move = { Enum.UserInputType.MouseButton1, Enum.KeyCode.ButtonR2 },
+
+    -- Brings a telepathic grip closer/further
+    distance = { Enum.UserInputType.MouseWheel }
 }
 
 --#endregion
@@ -108,7 +118,6 @@ function grip.new(root: BasePart, obj: BasePart)
 
     local alignPos = Instance.new("AlignPosition", obj)
     alignPos.ApplyAtCenterOfMass = true
-    alignPos.Mode = Enum.PositionAlignmentMode.OneAttachment
     alignPos.Attachment0 = baseAtt
     alignPos.Attachment1 = targetAtt
 
@@ -160,7 +169,8 @@ end
 --[ Initialization ]--
 --#region
 
-local dragging
+local dragging -- Updated to whatever grip is currently being dragged
+local scroll_delta = 0 -- Added to when scroll happens, and gets reset each time it's consumed & updated.
 
 --#endregion
 
@@ -240,7 +250,32 @@ local input_connections = {
 --[ Runtime ]--
 --#region
 
+ContextActionService:BindAction("telepath_scroll", function(_, state, input)
+    if not dragging then return Enum.ContextActionResult.Pass end
+
+    scroll_delta += input.Position.Z
+    return Enum.ContextActionResult.Sink
+end, false, table.unpack(BINDS.distance))
+
+local last_mouse_position = UserInputService:GetMouseLocation()
 local runtime = RunService.RenderStepped:Connect(function()
+    --> Poll mouse delta
+    local this_mouse_position = UserInputService:GetMouseLocation()
+
+    local raw_mouse_delta = (this_mouse_position-last_mouse_position)
+    local mouse_delta = raw_mouse_delta*CONFIG.grip.sensitivity
+
+    last_mouse_position = this_mouse_position
+
+    --> Update dragging grip
+    if dragging then
+        dragging.yaw -= mouse_delta.X -- Orbit around the character
+        dragging.pitch = math.clamp(dragging.pitch+mouse_delta.Y, -math.pi/2, math.pi/2)
+
+        dragging.dist += scroll_delta -- Add scroll_delta to distance
+        scroll_delta = 0 -- Reset scroll_delta each frame for fresh accumulation
+    end
+
     --> Update position targets
     for obj, grip in active_grips do
         local root_cf = grip.root.CFrame
