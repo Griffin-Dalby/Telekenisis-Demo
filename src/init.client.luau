@@ -95,6 +95,18 @@ local function getAimRay()
     return Camera:ViewportPointToRay(point.X, point.Y)
 end
 
+local function getAimObj()
+    local aimRay = getAimRay() -- Generates a ray object based on platform (MKB or Console/Mobile)
+    local aimCast = workspace:Raycast(
+        aimRay.Origin,
+        aimRay.Direction*CONFIG.grip.distance, -- Cap ray length to what's defined in config
+        GripCastParams
+    )
+    if not aimCast then return end
+
+    return aimCast.Instance -- Returns what got hit
+end
+
 --#endregion
 
 --[[ GRIP OBJECT ]]--
@@ -214,11 +226,9 @@ local actions: {[keyof<typeof(BINDS)>]: {pressed: (() -> ())?, released: (() -> 
             if #active_grips>=CONFIG.grip.maximum then
                 return end
 
-            local aimRay = getAimRay() -- Generates a ray object based on platform (MKB or Console/Mobile)
-            local aimCast = workspace:Raycast(aimRay.Origin, aimRay.Direction*CONFIG.grip.distance, GripCastParams)
-            if not aimCast then return end
-
-            local aimObj = aimCast.Instance
+            local aimObj = getAimObj()
+            if not aimObj then return end
+            
             if grip.has(aimObj) then
                 grip.get(aimObj):release()
             else
@@ -229,11 +239,9 @@ local actions: {[keyof<typeof(BINDS)>]: {pressed: (() -> ())?, released: (() -> 
 
     ["move"] = {
         pressed = function()
-            local aimRay = getAimRay()
-            local aimCast = workspace:Raycast(aimRay.Origin, aimRay.Direction*CONFIG.grip.distance, GripCastParams)
-            if not aimCast then return end
+            local aimObj = getAimObj()
+            if not aimObj then return end
 
-            local aimObj = aimCast.Instance
             dragging = grip.get(aimObj)
         end,
 
@@ -309,7 +317,6 @@ local runtime = RunService.RenderStepped:Connect(function()
     --> Update position targets
     for obj, grip in active_grips do
         local root_cf = grip.root.CFrame
-        local last_pos = grip.att[2].Position
         
         -- Calculate new position
         local pitch_cos = math.cos(grip.pitch)
