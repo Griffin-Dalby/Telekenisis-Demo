@@ -28,7 +28,13 @@ local CONFIG = {
         maximum = 4,
 
         -- How many studs away an object can be gripped from.
-        distance = 100
+    },
+
+    debug = {
+        gizmo = {
+            -- Visualizes grip AlignPos targets
+            grip_targets = true
+        }
     }
 }
 
@@ -91,10 +97,20 @@ function grip.new(root: BasePart, obj: BasePart)
     -- Generate attachments & constraint
     local baseAtt = Instance.new("Attachment", obj)
 
+    local targetP = Instance.new("Part", DebrisObjects)
+    targetP.Name = "GripTarget"
+    targetP.Size = Vector3.one/2
+    targetP.Transparency = CONFIG.debug.gizmo.grip_targets and 0 or 1
+    targetP.Color, targetP.Material = Color3.new(0, 1, 0), Enum.Material.Neon
+    targetP.Anchored, targetP.CanCollide = true, false
+
+    local targetAtt = Instance.new("Attachment", targetP)
+
     local alignPos = Instance.new("AlignPosition", obj)
     alignPos.ApplyAtCenterOfMass = true
     alignPos.Mode = Enum.PositionAlignmentMode.OneAttachment
     alignPos.Attachment0 = baseAtt
+    alignPos.Attachment1 = targetAtt
 
     -- Compile grip object
     local diff = root.Position - obj.Position
@@ -105,7 +121,7 @@ function grip.new(root: BasePart, obj: BasePart)
         dist = diff.Magnitude,
         dir = diff.Unit,
 
-        att = {baseAtt},
+        att = {baseAtt, targetP},
         align = alignPos
     }
 
@@ -227,7 +243,7 @@ local runtime = RunService.RenderStepped:Connect(function()
         local root_cf = grip.root.CFrame
         local offset_pos = root_cf + (grip.dir*grip.dist)
 
-        grip.align.Position = offset_pos.Position
+        grip.att[2].Position = grip_pos -- Update TargetP position (AlignPos Attachment1's parent)
     end
 end)
 
