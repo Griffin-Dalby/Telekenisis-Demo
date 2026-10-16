@@ -114,12 +114,14 @@ function grip.new(root: BasePart, obj: BasePart)
 
     -- Compile grip object
     local diff = root.Position - obj.Position
+    local local_dir = root.CFrame:VectorToObjectSpace(diff.Unit)
     local this = {
         object = obj,
         root = root,
 
         dist = diff.Magnitude,
-        dir = diff.Unit,
+        yaw = math.atan2(local_dir.X, local_dir.Z),
+        pitch = math.asin(math.clamp(local_dir.Y, -1, 1)),
 
         att = {baseAtt, targetP},
         align = alignPos
@@ -239,9 +241,21 @@ local input_connections = {
 --#region
 
 local runtime = RunService.RenderStepped:Connect(function()
+    --> Update position targets
     for obj, grip in active_grips do
         local root_cf = grip.root.CFrame
-        local offset_pos = root_cf + (grip.dir*grip.dist)
+        local last_pos = grip.att[2].Position
+        
+        -- Calculate new position
+        local pitch_cos = math.cos(grip.pitch)
+        local local_dir = Vector3.new(
+            pitch_cos*math.sin(grip.yaw),
+            math.sin(grip.pitch),
+            pitch_cos*math.cos(grip.yaw)
+        )
+        
+        local world_dir = root_cf:VectorToWorldSpace(local_dir)
+        local grip_pos = grip.root.Position-(world_dir*grip.dist)
 
         grip.att[2].Position = grip_pos -- Update TargetP position (AlignPos Attachment1's parent)
     end
