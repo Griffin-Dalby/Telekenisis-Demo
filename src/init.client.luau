@@ -100,9 +100,38 @@ end
 --[[ GRIP OBJECT ]]--
 --#region
 
-local active_grips = {}
-local grip = {}
+--[ Type Definition ]--
+--#region
 
+type grip_fields = {
+    object: BasePart,
+    root: BasePart,
+
+    dist: number,
+    yaw: number,
+    pitch: number,
+
+    att: {Instance},
+    align: AlignPosition
+}
+type grip_methods = {
+    release: (self: GripObject) -> (),
+}
+
+type GripObject = setmetatable<grip_fields, grip_methods>
+
+--#endregion
+
+local active_grips = {}
+local grip = {} :: {
+    new: (root: BasePart, obj: BasePart) -> GripObject,
+
+    has: (obj: BasePart) -> boolean,
+    get: (obj: BasePart) -> GripObject?
+} & grip_methods
+grip.__index = grip
+
+-- Constructor
 function grip.new(root: BasePart, obj: BasePart)
     -- Generate attachments & constraint
     local baseAtt = Instance.new("Attachment", obj)
@@ -124,7 +153,7 @@ function grip.new(root: BasePart, obj: BasePart)
     -- Compile grip object
     local diff = root.Position - obj.Position
     local local_dir = root.CFrame:VectorToObjectSpace(diff.Unit)
-    local this = {
+    local this: GripObject = setmetatable({
         object = obj,
         root = root,
 
@@ -133,27 +162,28 @@ function grip.new(root: BasePart, obj: BasePart)
         pitch = math.asin(math.clamp(local_dir.Y, -1, 1)),
 
         att = {baseAtt, targetP},
-        align = alignPos
-    }
+        align = alignPos,
+    }, grip)
 
     obj:AddTag("Gripped")
     active_grips[obj] = this
     return this
 end
 
+-- Top-level methods
 function grip.has(obj: BasePart)
     return active_grips[obj] ~= nil; end
 function grip.get(obj: BasePart)
     return active_grips[obj]; end
 
-function grip.release(obj: BasePart)
+-- Class methods
+function grip:release()
     -- Get grip_obj
-    local grip_obj = grip.get(obj)
-    if not grip_obj then return end
+    local obj = self.object
     
     -- Destroy instances & cleanup
-    grip_obj.align:Destroy()
-    for _, att in grip_obj.att do
+    self.align:Destroy()
+    for _, att in self.att do
         att:Destroy()
     end
 
