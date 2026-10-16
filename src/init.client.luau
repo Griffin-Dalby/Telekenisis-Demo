@@ -219,6 +219,8 @@ local actions: {[keyof<typeof(BINDS)>]: {pressed: (() -> ())?, released: (() -> 
 -- defined input for O(1) lookups.
 local pressed, released = {}, {} 
 for name, inputs in BINDS do
+    if not actions[name] then continue end -- Skip inputs that have other/no handlers
+
     for _, input in inputs do
         assert(not pressed[input] and not released[input], `Keybind {name} has a conflicting keybind "{input.Name}!" Please ensure bindings do not overlap.`)
             
