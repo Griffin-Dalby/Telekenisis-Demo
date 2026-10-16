@@ -118,7 +118,7 @@ type grip_methods = {
     release: (self: GripObject) -> (),
 }
 
-type GripObject = setmetatable<grip_fields, grip_methods>
+type GripObject = grip_fields & grip_methods
 
 --#endregion
 
@@ -127,7 +127,7 @@ local grip = {} :: {
     new: (root: BasePart, obj: BasePart) -> GripObject,
 
     has: (obj: BasePart) -> boolean,
-    get: (obj: BasePart) -> GripObject?
+    get: (obj: BasePart) -> GripObject
 } & grip_methods
 grip.__index = grip
 
@@ -220,7 +220,7 @@ local actions: {[keyof<typeof(BINDS)>]: {pressed: (() -> ())?, released: (() -> 
 
             local aimObj = aimCast.Instance
             if grip.has(aimObj) then
-                grip.release(aimObj)
+                grip.get(aimObj):release()
                 print("Grip released")
             else
                 grip.new(Humanoid.RootPart, aimObj)
@@ -335,8 +335,8 @@ end)
 
 Humanoid.Died:Once(function()
     -- Cleanup grip objects to free all grips
-    for obj in active_grips do
-        grip.release(obj)
+    for _, grip in active_grips do
+        grip:release()
     end
 
     -- Cleanup inputs to avoid new logic being handled
