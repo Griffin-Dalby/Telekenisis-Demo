@@ -221,10 +221,8 @@ local actions: {[keyof<typeof(BINDS)>]: {pressed: (() -> ())?, released: (() -> 
             local aimObj = aimCast.Instance
             if grip.has(aimObj) then
                 grip.get(aimObj):release()
-                print("Grip released")
             else
                 grip.new(Humanoid.RootPart, aimObj)
-                print(`New grip made`)
             end
         end
     },
