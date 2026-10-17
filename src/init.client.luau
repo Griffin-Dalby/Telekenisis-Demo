@@ -46,10 +46,10 @@ local CONFIG = {
 
 local BINDS = {
     -- Start a new grip
-    grip = { Enum.KeyCode.E, Enum.KeyCode.ButtonX },
+    grip = { Enum.KeyCode.E },
 
     -- Moves a telepathic grip
-    move = { Enum.UserInputType.MouseButton1, Enum.KeyCode.ButtonR2 },
+    move = { Enum.UserInputType.MouseButton1 },
 
     -- Brings a telepathic grip closer/further
     distance = { Enum.UserInputType.MouseWheel }
@@ -294,6 +294,7 @@ end, false, table.unpack(BINDS.distance))
 local last_mouse_position = UserInputService:GetMouseLocation()
 local runtime = RunService.RenderStepped:Connect(function()
     --> Poll mouse delta
+    -- Aiming is desktop-only by design
     local this_mouse_position = UserInputService:GetMouseLocation()
 
     local raw_mouse_delta = (this_mouse_position-last_mouse_position)
