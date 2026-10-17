@@ -85,19 +85,10 @@ WorldCastParams.FilterType = Enum.RaycastFilterType.Include
 --[[ FUNCTIONS ]]--
 --#region
 
-local function getAimRay()
-    local input_type = UserInputService:GetLastInputType().Name -- Check if console or mobile
-    local use_center = input_type:find("^Gamepad") or input_type == "Touch"
-
-    local point = if use_center
-        then Camera.ViewportSize/2 -- Use middle of screen for console
-        else UserInputService:GetMouseLocation() -- Use mouse location for PC
-
-    return Camera:ViewportPointToRay(point.X, point.Y)
-end
-
 local function getAimObj()
-    local aimRay = getAimRay() -- Generates a ray object based on platform (MKB or Console/Mobile)
+    local mouseLocation = UserInputService:GetMouseLocation()
+    local aimRay = Camera:ViewportPointToRay(mouseLocation.X, mouseLocation.Y)
+
     local aimCast = workspace:Raycast(
         aimRay.Origin,
         aimRay.Direction*CONFIG.grip.distance, -- Cap ray length to what's defined in config
