@@ -429,7 +429,8 @@ end)
 --#region
 
 Humanoid.Died:Once(function()
-    -- Cleanup grip objects to free all grips
+    -- Cleanup grip objects to free all grips, and move highlights to
+    -- highlight_pool.
     for _, this in active_grips do
         this:release()
     end
@@ -441,6 +442,12 @@ Humanoid.Died:Once(function()
     end
 
     ContextActionService:UnbindAction("telekinesis_scroll")
+
+    -- Cleanup highlights
+    hover_highlight:Destroy()
+    for _, highlight in highlight_pool do
+        highlight:Destroy()
+    end
 
     -- Finally cleanup runtimes to prevent errors
     runtime:Disconnect(); runtime = nil
