@@ -39,11 +39,20 @@ local CONFIG = {
         -- Maximum amount of objects that can be gripped at once.
         maximum = 4,
 
-        -- How many studs away an object can be gripped from.
-        distance = 50,
+        -- Max/min distance for grip
+        distance = {
+            -- How far away the object can be from the root.
+            maximum = 50,
+
+            -- How close the object can be to the root.
+            minimum = 5
+        },
 
         -- Determines how sensitive the drag mechanic is. (rads/pixel)
-        sensitivity = .005,
+        drag_sensitivity = .005,
+
+        -- Determines how sensitive the scroll mechanic is. (studs/step)
+        scroll_sensitivity = .5,
 
         -- Adjusts properties of the AlignPosition constraint
         constraint = {
@@ -63,7 +72,7 @@ local CONFIG = {
         -- Small items that visualize what's happening
         gizmo = {
             -- Visualizes grip AlignPos targets
-            grip_targets = true
+            grip_targets = false
         }
     }
 }
@@ -98,7 +107,7 @@ local Humanoid: Humanoid = Character:FindFirstChildWhichIsA("Humanoid") or Chara
 -- RayCast Parameters
 local GripCastParams = RaycastParams.new()
 GripCastParams.FilterDescendantsInstances = { GrippableObjects }
-GripCastParams.FilterType = Enum.RaycastFilterType.Include
+GripCastParams.FilterType = Enum.RaycastFilterType.Include -- Use an "Include" filter, so when we call getAimObj() it can only hit descendants from things defined above.
 
 --#endregion
 
@@ -106,12 +115,12 @@ GripCastParams.FilterType = Enum.RaycastFilterType.Include
 --#region
 
 local function getAimObj()
-    local mouseLocation = UserInputService:GetMouseLocation()
-    local aimRay = Camera:ViewportPointToRay(mouseLocation.X, mouseLocation.Y)
+    local mouseLocation = UserInputService:GetMouseLocation() -- Gets the mouse (includes the top-bar inset)
+    local aimRay = Camera:ViewportPointToRay(mouseLocation.X, mouseLocation.Y) -- Use ViewportPoint to include that top-bar inset
 
     local aimCast = workspace:Raycast(
         aimRay.Origin,
-        aimRay.Direction*CONFIG.grip.distance, -- Cap ray length to what's defined in config
+        aimRay.Direction*CONFIG.grip.distance.maximum, -- Cap ray length to config's max distance
         GripCastParams
     )
     if not aimCast then return end
@@ -122,10 +131,10 @@ end
 local function generateHighlight(settings: HighlightSettings)
     local highlight = Instance.new("Highlight")
 
-    for property, value in settings do
+    for property, value in settings do -- Go through all properties defined in passed table, and sets it in the highlight
         highlight[property] = value
     end
-    highlight.Parent = DebrisObjects
+    highlight.Parent = DebrisObjects -- Set parent last so all properties & styling is ready for presentation
 
     return highlight
 end
@@ -182,31 +191,33 @@ function grip.new(root: BasePart, obj: BasePart)
     local target_p = Instance.new("Part")
     target_p.Name = "GripTarget"
     target_p.Size = Vector3.one/2
-    target_p.Transparency = CONFIG.debug.gizmo.grip_targets and 0 or 1
+    target_p.Transparency = CONFIG.debug.gizmo.grip_targets and 0 or 1 -- Only make visible if debug.gizmo.grip_targets is true
     target_p.Color, target_p.Material = Color3.new(0, 1, 0), Enum.Material.Neon
-    target_p.Anchored, target_p.CanCollide = true, false
+    target_p.Anchored, target_p.CanCollide = true, false -- Anchored & Non-CanCollide so it acts as an empty transform
     target_p.Parent = DebrisObjects
 
     local target_att = Instance.new("Attachment")
     target_att.Parent = target_p
 
+    -- I chose to use AlignPosition over CFrame math, as it allows blocks to have
+    -- collision with the world, and adjustable physics / feel.
     local align_pos = Instance.new("AlignPosition")
-    align_pos.ApplyAtCenterOfMass = true
+    align_pos.ApplyAtCenterOfMass = true -- Off-center force spins the part in weird ways
     align_pos.Attachment0 = base_att
     align_pos.Attachment1 = target_att
 
-    align_pos.MaxForce = obj.AssemblyMass*CONFIG.grip.constraint.acceleration
-    align_pos.MaxVelocity = CONFIG.grip.constraint.max_velocity
+    align_pos.MaxForce = obj.AssemblyMass*CONFIG.grip.constraint.acceleration -- We want to scale Force by the object's mass so each part has the same acceleration
+    align_pos.MaxVelocity    = CONFIG.grip.constraint.max_velocity            -- Velocity & responsiveness are static and are the major things adjusting feel
     align_pos.Responsiveness = CONFIG.grip.constraint.responsiveness
 
     align_pos.Parent = obj
 
     -- Generate highlight
-    local this_highlight = table.remove(highlight_pool, 1)
+    local this_highlight = table.remove(highlight_pool, 1) -- Remove & return the first highlight in pool if available
     if this_highlight then
         this_highlight.Adornee = obj
     else
-        this_highlight = generateHighlight{
+        this_highlight = generateHighlight{ -- If not, create a new highlight
             OutlineColor = Color3.new(.2, .8, 1),
             FillColor = Color3.new(0, .2, .8),
             OutlineTransparency = .2,
@@ -219,16 +230,16 @@ function grip.new(root: BasePart, obj: BasePart)
 
     -- Compile grip object
     local diff = root.Position - obj.Position
-    local local_dir = root.CFrame:VectorToObjectSpace(diff.Unit)
+    local local_dir = root.CFrame:VectorToObjectSpace(diff.Unit) -- We want to do things in root local space so the object keeps offset when the root turns.
     local this: GripObject = setmetatable({
         -- Include obj & root in object to avoid re-deriving the values
         object = obj,
         root = root,
 
-        -- Hold dist, yaw & pitch for fast manipulation & storage
+        -- Dist, yaw & pitch are the orbit state that render loop updates
         dist = diff.Magnitude,
         yaw = math.atan2(local_dir.X, local_dir.Z),
-        pitch = math.asin(math.clamp(local_dir.Y, -1, 1)),
+        pitch = math.asin(math.clamp(local_dir.Y, -1, 1)), -- Clamp as floating-point error can push value past +-1, which makes asin return NaN.
 
         -- Hold attachments, constraint, and the active highlight
         att = {from=base_att, to=target_p},
@@ -256,7 +267,7 @@ function grip:release()
     active_grips[self.object] = nil
     active_grip_count -= 1
 
-    self.highlight.Adornee = nil
+    self.highlight.Adornee = nil -- Release our highlight into the pool
     table.insert(highlight_pool, self.highlight)
 end
 
@@ -272,7 +283,7 @@ local hovering: BasePart? -- Updated to whatever grippable object is currently b
 local dragging: GripObject? -- Updated to whatever grip is currently being dragged
 local scroll_delta = 0 -- Added to when scroll happens, and gets reset each time it's consumed & updated.
 
-local hover_highlight = generateHighlight{
+local hover_highlight = generateHighlight{ -- Adorned to only one object, whatever is being hovered or dragged.
     OutlineColor = Color3.new(.2, .5, 1),
     FillColor = Color3.new(0, 0, .5),
     OutlineTransparency = .4,
@@ -331,6 +342,7 @@ for name, inputs in BINDS do
     if not actions[name] then continue end -- Skip inputs that have other/no handlers
 
     for _, input in inputs do
+        -- Assert fails loudly as startup, so two actions overlapping need to be fixed before testing.
         assert(not pressed[input] and not released[input], `Keybind {name} has a conflicting keybind "{input.Name}!" Please ensure bindings do not overlap.`)
             
         pressed[input]  = actions[name].pressed
@@ -338,12 +350,12 @@ for name, inputs in BINDS do
     end
 end
 
--- Custom input dispatcher, I chose this system over CAS because to me, it
--- is more extendable than multiple CAS bindings, centralizing where actions
--- logic is and cleaning everything up.
+-- Custom input dispatcher, I chose this system over CAS because one table
+-- is the single place to add actions, lookup is O(1), and the same dispatcher
+-- handles keys & mouse buttons.
 
--- The exception is for the scroll wheel, which is polled in a CAS binding
--- below.
+-- The exception is for the scroll wheel, because the value arrives as InputChanged,
+-- and it can be sunk to prevent camera zooming.
 local function dispatch(handlers, input)
     -- We check KeyCode & UserInputType, as keyboard uses KeyCode, and mouse uses UserInputType
     local handler = handlers[input.KeyCode] or handlers[input.UserInputType]
@@ -367,19 +379,19 @@ local input_connections = {
 ContextActionService:BindAction("telekinesis_scroll", function(_, _, input)
     if not dragging then return Enum.ContextActionResult.Pass end
 
-    scroll_delta += input.Position.Z
-    return Enum.ContextActionResult.Sink
+    scroll_delta += input.Position.Z -- Add to delta (which will get consumed & reset to 0)
+    return Enum.ContextActionResult.Sink -- We want to sink only while dragging, so the camera doesn't zoom in or out while scrolling.
 end, false, table.unpack(BINDS.distance))
 
 local last_mouse_position = UserInputService:GetMouseLocation()
 
--- Run logic before rendering to prevent any stutter or odd steps
+-- Run logic before rendering to use freshest input & camera
 local runtime = RunService.RenderStepped:Connect(function()
     --> Poll mouse delta
     local this_mouse_position = UserInputService:GetMouseLocation()
 
     local raw_mouse_delta = (this_mouse_position-last_mouse_position)
-    local mouse_delta = raw_mouse_delta*CONFIG.grip.sensitivity
+    local mouse_delta = raw_mouse_delta*CONFIG.grip.drag_sensitivity
 
     last_mouse_position = this_mouse_position
 
@@ -388,7 +400,7 @@ local runtime = RunService.RenderStepped:Connect(function()
         dragging.yaw -= mouse_delta.X -- Orbit left/right around the character
         dragging.pitch = math.clamp(dragging.pitch+mouse_delta.Y, -math.pi/2, math.pi/2) -- Orbit up/down around character (clamped -90 to +90 degs)
 
-        dragging.dist = math.clamp(dragging.dist+scroll_delta, 5, CONFIG.grip.distance) -- Add scroll_delta to distance
+        dragging.dist = math.clamp(dragging.dist+(scroll_delta*CONFIG.grip.scroll_sensitivity), CONFIG.grip.distance.minimum, CONFIG.grip.distance.maximum) -- Add scroll_delta to distance
         scroll_delta = 0 -- Reset scroll_delta each frame for fresh accumulation
     end
 
@@ -398,7 +410,7 @@ local runtime = RunService.RenderStepped:Connect(function()
         
         -- Calculate new position
         -- Use spherical coordinates here to move positions around the
-        -- root in a half-sphere, and push the target in/out originating
+        -- root in a full sphere, and push the target in/out originating
         -- from the root point.
 
         local pitch_cos = math.cos(this.pitch)
@@ -415,8 +427,8 @@ local runtime = RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Run visuals after physics & separate from logic for optimization purposes,
--- as this all would be too much for one single pre-render step
+-- Run visuals after physics & separate from logic as one-frame-old cursor & camera
+-- are light for highlight system, so it can run after main runtime.
 local visuals = RunService.Heartbeat:Connect(function()
     -- Each frame hovering gets reset in this heartbeat, and it is used
     -- everywhere else when AimObj is needed. I do this so I can update
