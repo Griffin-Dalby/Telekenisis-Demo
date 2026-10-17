@@ -121,7 +121,7 @@ type grip_fields = {
     yaw: number,
     pitch: number,
 
-    att: {Instance},
+    att: {from: Attachment, to: BasePart & {Attachment: Attachment}},
     align: AlignPosition
 }
 type grip_methods = {
@@ -175,7 +175,7 @@ function grip.new(root: BasePart, obj: BasePart)
         yaw = math.atan2(local_dir.X, local_dir.Z),
         pitch = math.asin(math.clamp(local_dir.Y, -1, 1)),
 
-        att = {base_att, target_p},
+        att = {from=base_att, to=target_p},
         align = align_pos,
     }, grip)
 
@@ -332,7 +332,7 @@ local runtime = RunService.RenderStepped:Connect(function()
         local world_dir = root_cf:VectorToWorldSpace(local_dir)
         local grip_pos = grip.root.Position-(world_dir*grip.dist)
 
-        grip.att[2].Position = grip_pos -- Update TargetP position (AlignPos Attachment1's parent)
+        grip.att.to.Position = grip_pos -- Update TargetP position (AlignPos Attachment1's parent)
     end
 end)
 
