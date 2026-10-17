@@ -18,6 +18,13 @@ local Players = game:GetService("Players")
 --[[ TYPE DEFINITIONS ]]--
 --#region
 
+type HighlightSettings = {
+    Adornee: Instance?,
+    DepthMode: Enum.HighlightDepthMode?,
+    Color: {Outline: Color3?, Fill: Color3?}?,
+    Transparency: {Outline: number?, Fill: number?}?,
+}
+
 --#endregion
 
 --[[ SETTINGS ]]--
@@ -109,6 +116,21 @@ local function getAimObj()
     return aimCast.Instance -- Returns what got hit
 end
 
+local function generateHighlight(settings: HighlightSettings)
+    local highlight = Instance.new("Highlight")
+    if settings.Color and settings.Color.Outline then highlight.OutlineColor = settings.Color.Outline; end
+    if settings.Color and settings.Color.Fill then highlight.FillColor = settings.Color.Fill; end
+
+    if settings.Transparency and settings.Transparency.Outline then highlight.OutlineTransparency = settings.Transparency.Outline; end
+    if settings.Transparency and settings.Transparency.Fill then highlight.FillTransparency = settings.Transparency.Fill; end
+
+    if settings.DepthMode then highlight.DepthMode = settings.DepthMode; end
+    highlight.Parent = DebrisObjects
+    highlight.Adornee = settings.Adornee
+
+    return highlight
+end
+
 --#endregion
 
 --[[ GRIP OBJECT ]]--
@@ -126,7 +148,8 @@ type grip_fields = {
     pitch: number,
 
     att: {from: Attachment, to: BasePart & {Attachment: Attachment}},
-    align: AlignPosition
+    align: AlignPosition,
+    highlight: Highlight,
 }
 type grip_methods = {
     release: (self: GripObject) -> (),
@@ -138,6 +161,9 @@ type GripObject = grip_fields & grip_methods
 
 local active_grip_count = 0
 local active_grips = {}
+
+local highlight_pool = {}
+
 local grip = {} :: {
     new: (root: BasePart, obj: BasePart) -> GripObject,
 
@@ -174,6 +200,20 @@ function grip.new(root: BasePart, obj: BasePart)
 
     align_pos.Parent = obj
 
+    -- Generate highlight
+    local this_highlight = highlight_pool[1] or generateHighlight{
+        Color = {
+            Outline = Color3.new(.2, .8, 1),
+            Fill = Color3.new(0, .2, .8),
+        },
+        Transparency = {
+            Outline = .2,
+            Fill = .4
+        },
+        DepthMode = Enum.HighlightDepthMode.AlwaysOnTop,
+    }
+    this_highlight.Adornee = obj
+
     -- Compile grip object
     local diff = root.Position - obj.Position
     local local_dir = root.CFrame:VectorToObjectSpace(diff.Unit)
@@ -187,6 +227,7 @@ function grip.new(root: BasePart, obj: BasePart)
 
         att = {from=base_att, to=target_p},
         align = align_pos,
+        highlight = this_highlight
     }, grip)
 
     obj:AddTag("Gripped")
@@ -212,6 +253,9 @@ function grip:release()
     self.object:RemoveTag("Gripped")
     active_grips[self.object] = nil
     active_grip_count -= 1
+
+    self.highlight.Adornee = nil
+    table.insert(highlight_pool, self.highlight)
 end
 
 --#endregion
@@ -222,8 +266,21 @@ end
 --[ Initialization ]--
 --#region
 
-local dragging -- Updated to whatever grip is currently being dragged
+local hovering: BasePart? -- Updated to whatever grippable object is currently being hovered
+local dragging: GripObject? -- Updated to whatever grip is currently being dragged
 local scroll_delta = 0 -- Added to when scroll happens, and gets reset each time it's consumed & updated.
+
+local hover_highlight = generateHighlight{
+    Color = {
+        Outline = Color3.new(.2, .5, 1),
+        Fill = Color3.new(0, 0, .5),
+    },
+    Transparency = {
+        Outline = .4,
+        Fill = .85
+    },
+    DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+}
 
 --#endregion
 
@@ -234,29 +291,35 @@ local scroll_delta = 0 -- Added to when scroll happens, and gets reset each time
 local actions: {[keyof<typeof(BINDS)>]: {pressed: (() -> ())?, released: (() -> ())?}} = {
     ["grip"] = { 
         pressed = function()
-            local aim_obj = getAimObj()
-            if not aim_obj then return end
-            local grip_obj = grip.get(aim_obj)
+            if not hovering then return end
+            local grip_obj = grip.get(hovering)
 
             if grip_obj then
                 grip_obj:release()
             else
                 if active_grip_count>=CONFIG.grip.maximum then
                     return end
-                grip.new(Humanoid.RootPart, aim_obj)
+                grip.new(Humanoid.RootPart, hovering)
             end
         end
     },
 
     ["move"] = {
         pressed = function()
-            local aim_obj = getAimObj()
-            if not aim_obj then return end
+            if not hovering then return end
+            dragging = grip.get(hovering)
 
-            dragging = grip.get(aim_obj)
+            if dragging then
+                dragging.highlight.Enabled = false  
+                hover_highlight.Adornee = dragging.object
+            end
         end,
 
         released = function()
+            if not dragging then return end
+            dragging.highlight.Enabled = true
+            hover_highlight.Adornee = nil
+
             dragging = nil
         end
     }
@@ -351,6 +414,17 @@ local runtime = RunService.RenderStepped:Connect(function()
     end
 end)
 
+local visuals = RunService.Heartbeat:Connect(function()
+    -- Each frame hovering gets reset in this heartbeat, and it is used
+    -- everywhere else when AimObj is needed. I do this so I can update
+    -- visuals here, and have this raycast centralized to avoid
+    -- unnecessary casts. 
+    hovering = getAimObj()
+    if not dragging then
+        hover_highlight.Adornee = hovering
+    end
+end)
+
 --#endregion
 
 --[ Cleanup ]--
@@ -370,8 +444,9 @@ Humanoid.Died:Once(function()
 
     ContextActionService:UnbindAction("telekinesis_scroll")
 
-    -- Finally cleanup runtime to prevent errors
+    -- Finally cleanup runtimes to prevent errors
     runtime:Disconnect(); runtime = nil
+    visuals:Disconnect(); visuals = nil
 end)
 
 --#endregion
