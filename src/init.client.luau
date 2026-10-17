@@ -111,7 +111,7 @@ local function getAimObj()
 
     local aimCast = workspace:Raycast(
         aimRay.Origin,
-        aimRay.Direction*(CONFIG.grip.distance+5), -- Cap ray length to what's defined in config (add small buffer so it doesn't get stuck @ max)
+        aimRay.Direction*CONFIG.grip.distance, -- Cap ray length to what's defined in config
         GripCastParams
     )
     if not aimCast then return end
@@ -163,13 +163,13 @@ type GripObject = grip_fields & grip_methods
 local active_grip_count = 0
 local active_grips = {}
 
--- We pool highlights to ensure this system is vastly scalable if we need
--- to ramp up the amount of highlights we need to use.
+-- We pool highlights to ensure this system avoids creating & destroying
+-- visual instances
 local highlight_pool = {}
 
 local grip = {} :: {
     new: (root: BasePart, obj: BasePart) -> GripObject,
-    get: (obj: BasePart) -> GripObject
+    get: (obj: BasePart) -> GripObject?
 } & grip_methods
 grip.__index = grip
 
@@ -221,7 +221,7 @@ function grip.new(root: BasePart, obj: BasePart)
     local diff = root.Position - obj.Position
     local local_dir = root.CFrame:VectorToObjectSpace(diff.Unit)
     local this: GripObject = setmetatable({
-        -- Include obj & root in object for fast maths with no lookups
+        -- Include obj & root in object to avoid re-deriving the values
         object = obj,
         root = root,
 
@@ -236,7 +236,6 @@ function grip.new(root: BasePart, obj: BasePart)
         highlight = this_highlight
     }, grip)
 
-    obj:AddTag("Gripped")
     active_grips[obj] = this
     active_grip_count += 1
     return this
@@ -254,7 +253,6 @@ function grip:release()
         att:Destroy()
     end
 
-    self.object:RemoveTag("Gripped")
     active_grips[self.object] = nil
     active_grip_count -= 1
 
@@ -346,7 +344,7 @@ end
 
 -- The exception is for the scroll wheel, which is polled in a CAS binding
 -- below.
-local function dispatch(handlers, input, gp)
+local function dispatch(handlers, input)
     -- We check KeyCode & UserInputType, as keyboard uses KeyCode, and mouse uses UserInputType
     local handler = handlers[input.KeyCode] or handlers[input.UserInputType]
     if handler then handler(); end
@@ -356,7 +354,7 @@ local input_connections = {
     began = UserInputService.InputBegan:Connect(function(i, gp)
         if not gp then dispatch(pressed, i); end
     end),
-    ended = UserInputService.InputEnded:Connect(function(i, gp)
+    ended = UserInputService.InputEnded:Connect(function(i)
         dispatch(released, i)
     end)
 }
@@ -366,7 +364,7 @@ local input_connections = {
 --[ Runtime ]--
 --#region
 
-ContextActionService:BindAction("telekinesis_scroll", function(_, state, input)
+ContextActionService:BindAction("telekinesis_scroll", function(_, _, input)
     if not dragging then return Enum.ContextActionResult.Pass end
 
     scroll_delta += input.Position.Z
@@ -374,6 +372,8 @@ ContextActionService:BindAction("telekinesis_scroll", function(_, state, input)
 end, false, table.unpack(BINDS.distance))
 
 local last_mouse_position = UserInputService:GetMouseLocation()
+
+-- Run logic before rendering to prevent any stutter or odd steps
 local runtime = RunService.RenderStepped:Connect(function()
     --> Poll mouse delta
     local this_mouse_position = UserInputService:GetMouseLocation()
@@ -393,7 +393,7 @@ local runtime = RunService.RenderStepped:Connect(function()
     end
 
     --> Update position targets
-    for obj, this in active_grips do
+    for _, this in active_grips do
         local root_cf = this.root.CFrame
         
         -- Calculate new position
@@ -415,6 +415,8 @@ local runtime = RunService.RenderStepped:Connect(function()
     end
 end)
 
+-- Run visuals after physics & separate from logic for optimization purposes,
+-- as this all would be too much for one single pre-render step
 local visuals = RunService.Heartbeat:Connect(function()
     -- Each frame hovering gets reset in this heartbeat, and it is used
     -- everywhere else when AimObj is needed. I do this so I can update
