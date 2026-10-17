@@ -1,5 +1,6 @@
+-- Discord: griff2blurryy | Roblox: InfEnv
 --[[
-    Telekenisis Demo
+    Telekinesis Demo
 --]]
 
 --[[ SERVICES ]]--
@@ -31,7 +32,7 @@ local CONFIG = {
         -- How many studs away an object can be gripped from.
         distance = 100,
 
-        -- Determines how sensitive the drag mechanic is. (studs/pixel)
+        -- Determines how sensitive the drag mechanic is. (rads/pixel)
         sensitivity = .005
     },
 
@@ -59,9 +60,9 @@ local BINDS = {
 --[[ CONSTANTS ]]--
 --#region
 
-local GrippableObjects = workspace.Grippable :: Folder & { [string]: BasePart }
-local CollidableObjects = workspace.Collidable :: Folder & { [string]: BasePart }
-local DebrisObjects = workspace.Debris :: Folder & { [string]: BasePart }
+local GrippableObjects = workspace:WaitForChild("Grippable") :: Folder & { [string]: BasePart }
+local CollidableObjects = workspace:WaitForChild("Collidable") :: Folder & { [string]: BasePart }
+local DebrisObjects = workspace:WaitForChild("Debris") :: Folder & { [string]: BasePart }
 
 local Camera = workspace.CurrentCamera
 
@@ -146,21 +147,25 @@ grip.__index = grip
 -- Constructor
 function grip.new(root: BasePart, obj: BasePart)
     -- Generate attachments & constraint
-    local baseAtt = Instance.new("Attachment", obj)
+    local base_att = Instance.new("Attachment")
+    base_att.Parent = obj
 
-    local targetP = Instance.new("Part", DebrisObjects)
-    targetP.Name = "GripTarget"
-    targetP.Size = Vector3.one/2
-    targetP.Transparency = CONFIG.debug.gizmo.grip_targets and 0 or 1
-    targetP.Color, targetP.Material = Color3.new(0, 1, 0), Enum.Material.Neon
-    targetP.Anchored, targetP.CanCollide = true, false
+    local target_p = Instance.new("Part")
+    target_p.Name = "GripTarget"
+    target_p.Size = Vector3.one/2
+    target_p.Transparency = CONFIG.debug.gizmo.grip_targets and 0 or 1
+    target_p.Color, target_p.Material = Color3.new(0, 1, 0), Enum.Material.Neon
+    target_p.Anchored, target_p.CanCollide = true, false
+    target_p.Parent = DebrisObjects
 
-    local targetAtt = Instance.new("Attachment", targetP)
+    local target_att = Instance.new("Attachment")
+    target_att.Parent = target_p
 
-    local alignPos = Instance.new("AlignPosition", obj)
-    alignPos.ApplyAtCenterOfMass = true
-    alignPos.Attachment0 = baseAtt
-    alignPos.Attachment1 = targetAtt
+    local align_pos = Instance.new("AlignPosition")
+    align_pos.ApplyAtCenterOfMass = true
+    align_pos.Attachment0 = base_att
+    align_pos.Attachment1 = target_att
+    align_pos.Parent = obj
 
     -- Compile grip object
     local diff = root.Position - obj.Position
@@ -173,8 +178,8 @@ function grip.new(root: BasePart, obj: BasePart)
         yaw = math.atan2(local_dir.X, local_dir.Z),
         pitch = math.asin(math.clamp(local_dir.Y, -1, 1)),
 
-        att = {baseAtt, targetP},
-        align = alignPos,
+        att = {base_att, target_p},
+        align = align_pos,
     }, grip)
 
     obj:AddTag("Gripped")
@@ -226,23 +231,23 @@ local actions: {[keyof<typeof(BINDS)>]: {pressed: (() -> ())?, released: (() -> 
             if #active_grips>=CONFIG.grip.maximum then
                 return end
 
-            local aimObj = getAimObj()
-            if not aimObj then return end
-            
-            if grip.has(aimObj) then
-                grip.get(aimObj):release()
+            local aim_obj = getAimObj()
+            if not aim_obj then return end
+
+            if grip.has(aim_obj) then
+                grip.get(aim_obj):release()
             else
-                grip.new(Humanoid.RootPart, aimObj)
+                grip.new(Humanoid.RootPart, aim_obj)
             end
         end
     },
 
     ["move"] = {
         pressed = function()
-            local aimObj = getAimObj()
-            if not aimObj then return end
+            local aim_obj = getAimObj()
+            if not aim_obj then return end
 
-            dragging = grip.get(aimObj)
+            dragging = grip.get(aim_obj)
         end,
 
         released = function()
@@ -307,10 +312,10 @@ local runtime = RunService.RenderStepped:Connect(function()
 
     --> Update dragging grip
     if dragging then
-        dragging.yaw -= mouse_delta.X -- Orbit around the character
-        dragging.pitch = math.clamp(dragging.pitch+mouse_delta.Y, -math.pi/2, math.pi/2)
+        dragging.yaw -= mouse_delta.X -- Orbit left/right around the character
+        dragging.pitch = math.clamp(dragging.pitch+mouse_delta.Y, -math.pi/2, math.pi/2) -- Orbit up/down around character (wrapped -90 to +90 degs)
 
-        dragging.dist += scroll_delta -- Add scroll_delta to distance
+        dragging.dist = math.clamp(dragging.dist+scroll_delta, 5, CONFIG.grip.distance) -- Add scroll_delta to distance
         scroll_delta = 0 -- Reset scroll_delta each frame for fresh accumulation
     end
 
@@ -349,6 +354,8 @@ Humanoid.Died:Once(function()
         conn:Disconnect()
         input_connections[i] = nil
     end
+
+    ContextActionService:UnbindAction("telepath_scroll")
 
     -- Finally cleanup runtime to prevent errors
     runtime:Disconnect(); runtime = nil
