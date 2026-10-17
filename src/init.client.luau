@@ -30,7 +30,7 @@ local CONFIG = {
         maximum = 4,
 
         -- How many studs away an object can be gripped from.
-        distance = 100,
+        distance = 50,
 
         -- Determines how sensitive the drag mechanic is. (rads/pixel)
         sensitivity = .005,
@@ -101,7 +101,7 @@ local function getAimObj()
 
     local aimCast = workspace:Raycast(
         aimRay.Origin,
-        aimRay.Direction*CONFIG.grip.distance, -- Cap ray length to what's defined in config
+        aimRay.Direction*(CONFIG.grip.distance+5), -- Cap ray length to what's defined in config (add small buffer so it doesn't get stuck @ max)
         GripCastParams
     )
     if not aimCast then return end
