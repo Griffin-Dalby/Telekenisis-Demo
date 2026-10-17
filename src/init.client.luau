@@ -211,17 +211,16 @@ function grip.get(obj: BasePart)
 
 -- Class methods
 function grip:release()
-    -- Get grip_obj
-    local obj = self.object
-    
     -- Destroy instances & cleanup
     self.align:Destroy()
     for _, att in self.att do
         att:Destroy()
     end
 
-    obj:RemoveTag("Gripped")
-    active_grips[obj] = nil
+    self.object:RemoveTag("Gripped")
+    active_grips[self.object] = nil
+
+    table.clear(self)
 end
 
 --#endregion
@@ -289,6 +288,9 @@ end
 -- Custom input dispatcher, I chose this system over CAS because to me, it
 -- is more extendable than multiple CAS bindings, centralizing where actions
 -- logic is and cleaning everything up.
+
+-- The exception is for the scroll wheel, which is polled in a CAS binding
+-- below.
 local function dispatch(handlers, input, gp)
     -- We check KeyCode & UserInputType, as keyboard/controller uses KeyCode, and mouse/touch uses UserInputType
     local handler = handlers[input.KeyCode] or handlers[input.UserInputType]
@@ -331,27 +333,28 @@ local runtime = RunService.RenderStepped:Connect(function()
     if dragging then
         dragging.yaw -= mouse_delta.X -- Orbit left/right around the character
         dragging.pitch = math.clamp(dragging.pitch+mouse_delta.Y, -math.pi/2, math.pi/2) -- Orbit up/down around character (wrapped -90 to +90 degs)
+        print(mouse_delta.Magnitude)
 
         dragging.dist = math.clamp(dragging.dist+scroll_delta, 5, CONFIG.grip.distance) -- Add scroll_delta to distance
         scroll_delta = 0 -- Reset scroll_delta each frame for fresh accumulation
     end
 
     --> Update position targets
-    for obj, grip in active_grips do
-        local root_cf = grip.root.CFrame
+    for obj, this in active_grips do
+        local root_cf = this.root.CFrame
         
         -- Calculate new position
-        local pitch_cos = math.cos(grip.pitch)
+        local pitch_cos = math.cos(this.pitch)
         local local_dir = Vector3.new(
-            pitch_cos*math.sin(grip.yaw),
-            math.sin(grip.pitch),
-            pitch_cos*math.cos(grip.yaw)
+            pitch_cos*math.sin(this.yaw),
+            math.sin(this.pitch),
+            pitch_cos*math.cos(this.yaw)
         )
         
         local world_dir = root_cf:VectorToWorldSpace(local_dir)
-        local grip_pos = grip.root.Position-(world_dir*grip.dist)
+        local grip_pos = this.root.Position-(world_dir*this.dist)
 
-        grip.att.to.Position = grip_pos -- Update TargetP position (AlignPos Attachment1's parent)
+        this.att.to.Position = grip_pos -- Update TargetP position (AlignPos Attachment1's parent)
     end
 end)
 
@@ -362,8 +365,8 @@ end)
 
 Humanoid.Died:Once(function()
     -- Cleanup grip objects to free all grips
-    for _, grip in active_grips do
-        grip:release()
+    for _, this in active_grips do
+        this:release()
     end
 
     -- Cleanup inputs to avoid new logic being handled
