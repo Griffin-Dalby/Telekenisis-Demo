@@ -99,6 +99,12 @@ local function getAimObj()
     return aimCast.Instance -- Returns what got hit
 end
 
+local function countT(tbl)
+    local i=0
+    for _ in tbl do i+=1; end
+    return i
+end
+
 --#endregion
 
 --[[ GRIP OBJECT ]]--
@@ -219,7 +225,7 @@ local scroll_delta = 0 -- Added to when scroll happens, and gets reset each time
 local actions: {[keyof<typeof(BINDS)>]: {pressed: (() -> ())?, released: (() -> ())?}} = {
     ["grip"] = { 
         pressed = function()
-            if #active_grips>=CONFIG.grip.maximum then
+            if countT(active_grips)>=CONFIG.grip.maximum then
                 return end
 
             local aim_obj = getAimObj()
