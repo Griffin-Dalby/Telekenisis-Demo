@@ -21,8 +21,11 @@ local Players = game:GetService("Players")
 type HighlightSettings = {
     Adornee: Instance?,
     DepthMode: Enum.HighlightDepthMode?,
-    Color: {Outline: Color3?, Fill: Color3?}?,
-    Transparency: {Outline: number?, Fill: number?}?,
+
+    OutlineColor: Color3?,
+    FillColor: Color3?,
+    OutlineTransparency: number?,
+    FillTransparency: number?
 }
 
 --#endregion
@@ -118,15 +121,11 @@ end
 
 local function generateHighlight(settings: HighlightSettings)
     local highlight = Instance.new("Highlight")
-    if settings.Color and settings.Color.Outline then highlight.OutlineColor = settings.Color.Outline; end
-    if settings.Color and settings.Color.Fill then highlight.FillColor = settings.Color.Fill; end
 
-    if settings.Transparency and settings.Transparency.Outline then highlight.OutlineTransparency = settings.Transparency.Outline; end
-    if settings.Transparency and settings.Transparency.Fill then highlight.FillTransparency = settings.Transparency.Fill; end
-
-    if settings.DepthMode then highlight.DepthMode = settings.DepthMode; end
+    for property, value in settings do
+        highlight[property] = value
+    end
     highlight.Parent = DebrisObjects
-    highlight.Adornee = settings.Adornee
 
     return highlight
 end
@@ -159,9 +158,13 @@ type GripObject = grip_fields & grip_methods
 
 --#endregion
 
+-- We count the active grips alongside keeping track of them, so we can
+-- have a fast lookup for the count, over counting the table.
 local active_grip_count = 0
 local active_grips = {}
 
+-- We pool highlights to ensure this system is vastly scalable if we need
+-- to ramp up the amount of highlights we need to use.
 local highlight_pool = {}
 
 local grip = {} :: {
@@ -218,13 +221,16 @@ function grip.new(root: BasePart, obj: BasePart)
     local diff = root.Position - obj.Position
     local local_dir = root.CFrame:VectorToObjectSpace(diff.Unit)
     local this: GripObject = setmetatable({
+        -- Include obj & root in object for fast maths with no lookups
         object = obj,
         root = root,
 
+        -- Hold dist, yaw & pitch for fast manipulation & storage
         dist = diff.Magnitude,
         yaw = math.atan2(local_dir.X, local_dir.Z),
         pitch = math.asin(math.clamp(local_dir.Y, -1, 1)),
 
+        -- Hold attachments, constraint, and the active highlight
         att = {from=base_att, to=target_p},
         align = align_pos,
         highlight = this_highlight
@@ -269,14 +275,11 @@ local dragging: GripObject? -- Updated to whatever grip is currently being dragg
 local scroll_delta = 0 -- Added to when scroll happens, and gets reset each time it's consumed & updated.
 
 local hover_highlight = generateHighlight{
-    Color = {
-        Outline = Color3.new(.2, .5, 1),
-        Fill = Color3.new(0, 0, .5),
-    },
-    Transparency = {
-        Outline = .4,
-        Fill = .85
-    },
+    OutlineColor = Color3.new(.2, .5, 1),
+    FillColor = Color3.new(0, 0, .5),
+    OutlineTransparency = .4,
+    FillTransparency = .85,
+    
     DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 }
 
