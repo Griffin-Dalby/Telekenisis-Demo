@@ -199,18 +199,20 @@ function grip.new(root: BasePart, obj: BasePart)
     align_pos.Parent = obj
 
     -- Generate highlight
-    local this_highlight = highlight_pool[1] or generateHighlight{
-        Color = {
-            Outline = Color3.new(.2, .8, 1),
-            Fill = Color3.new(0, .2, .8),
-        },
-        Transparency = {
-            Outline = .2,
-            Fill = .4
-        },
-        DepthMode = Enum.HighlightDepthMode.AlwaysOnTop,
-    }
-    this_highlight.Adornee = obj
+    local this_highlight = table.remove(highlight_pool, 1)
+    if this_highlight then
+        this_highlight.Adornee = obj
+    else
+        this_highlight = generateHighlight{
+            OutlineColor = Color3.new(.2, .8, 1),
+            FillColor = Color3.new(0, .2, .8),
+            OutlineTransparency = .2,
+            FillTransparency = .4,
+
+            DepthMode = Enum.HighlightDepthMode.AlwaysOnTop,
+            Adornee = obj
+        }
+    end
 
     -- Compile grip object
     local diff = root.Position - obj.Position
