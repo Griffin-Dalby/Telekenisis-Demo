@@ -219,8 +219,6 @@ function grip:release()
 
     self.object:RemoveTag("Gripped")
     active_grips[self.object] = nil
-
-    table.clear(self)
 end
 
 --#endregion
