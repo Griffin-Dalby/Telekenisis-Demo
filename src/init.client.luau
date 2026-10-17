@@ -179,7 +179,7 @@ function grip.new(root: BasePart, obj: BasePart)
 
     align_pos.MaxForce = obj.AssemblyMass*CONFIG.grip.constraint.acceleration
     align_pos.MaxVelocity = CONFIG.grip.constraint.max_velocity
-    align_pos.Responsiveness = CONFIG.grip.constraint.acceleration
+    align_pos.Responsiveness = CONFIG.grip.constraint.responsiveness
 
     align_pos.Parent = obj
 
@@ -333,7 +333,6 @@ local runtime = RunService.RenderStepped:Connect(function()
     if dragging then
         dragging.yaw -= mouse_delta.X -- Orbit left/right around the character
         dragging.pitch = math.clamp(dragging.pitch+mouse_delta.Y, -math.pi/2, math.pi/2) -- Orbit up/down around character (wrapped -90 to +90 degs)
-        print(mouse_delta.Magnitude)
 
         dragging.dist = math.clamp(dragging.dist+scroll_delta, 5, CONFIG.grip.distance) -- Add scroll_delta to distance
         scroll_delta = 0 -- Reset scroll_delta each frame for fresh accumulation
