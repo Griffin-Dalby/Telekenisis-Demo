@@ -35,7 +35,7 @@ local CONFIG = {
         -- Determines how sensitive the drag mechanic is. (rads/pixel)
         sensitivity = .005,
 
-        -- Adjusts properties of the AlignProperty constraint
+        -- Adjusts properties of the AlignPosition constraint
         constraint = {
             -- Mass*Acceleration(this) to get AlignPos MaxForce
             acceleration = 500,
@@ -58,14 +58,15 @@ local CONFIG = {
     }
 }
 
+-- Aiming is desktop-only by design.
 local BINDS = {
     -- Start a new grip
     grip = { Enum.KeyCode.E },
 
-    -- Moves a telepathic grip
+    -- Moves a grip
     move = { Enum.UserInputType.MouseButton1 },
 
-    -- Brings a telepathic grip closer/further
+    -- Brings a grip closer/further
     distance = { Enum.UserInputType.MouseWheel }
 }
 
@@ -75,7 +76,6 @@ local BINDS = {
 --#region
 
 local GrippableObjects = workspace:WaitForChild("Grippable") :: Folder & { [string]: BasePart }
-local CollidableObjects = workspace:WaitForChild("Collidable") :: Folder & { [string]: BasePart }
 local DebrisObjects = workspace:WaitForChild("Debris") :: Folder & { [string]: BasePart }
 
 local Camera = workspace.CurrentCamera
@@ -89,10 +89,6 @@ local Humanoid: Humanoid = Character:FindFirstChildWhichIsA("Humanoid") or Chara
 local GripCastParams = RaycastParams.new()
 GripCastParams.FilterDescendantsInstances = { GrippableObjects }
 GripCastParams.FilterType = Enum.RaycastFilterType.Include
-
-local WorldCastParams = RaycastParams.new()
-WorldCastParams.FilterDescendantsInstances = { CollidableObjects }
-WorldCastParams.FilterType = Enum.RaycastFilterType.Include
 
 --#endregion
 
@@ -287,7 +283,7 @@ end
 -- The exception is for the scroll wheel, which is polled in a CAS binding
 -- below.
 local function dispatch(handlers, input, gp)
-    -- We check KeyCode & UserInputType, as keyboard/controller uses KeyCode, and mouse/touch uses UserInputType
+    -- We check KeyCode & UserInputType, as keyboard uses KeyCode, and mouse uses UserInputType
     local handler = handlers[input.KeyCode] or handlers[input.UserInputType]
     if handler then handler(); end
 end
@@ -306,7 +302,7 @@ local input_connections = {
 --[ Runtime ]--
 --#region
 
-ContextActionService:BindAction("telepath_scroll", function(_, state, input)
+ContextActionService:BindAction("telekinesis_scroll", function(_, state, input)
     if not dragging then return Enum.ContextActionResult.Pass end
 
     scroll_delta += input.Position.Z
@@ -316,7 +312,6 @@ end, false, table.unpack(BINDS.distance))
 local last_mouse_position = UserInputService:GetMouseLocation()
 local runtime = RunService.RenderStepped:Connect(function()
     --> Poll mouse delta
-    -- Aiming is desktop-only by design
     local this_mouse_position = UserInputService:GetMouseLocation()
 
     local raw_mouse_delta = (this_mouse_position-last_mouse_position)
@@ -327,7 +322,7 @@ local runtime = RunService.RenderStepped:Connect(function()
     --> Update dragging grip
     if dragging then
         dragging.yaw -= mouse_delta.X -- Orbit left/right around the character
-        dragging.pitch = math.clamp(dragging.pitch+mouse_delta.Y, -math.pi/2, math.pi/2) -- Orbit up/down around character (wrapped -90 to +90 degs)
+        dragging.pitch = math.clamp(dragging.pitch+mouse_delta.Y, -math.pi/2, math.pi/2) -- Orbit up/down around character (clamped -90 to +90 degs)
 
         dragging.dist = math.clamp(dragging.dist+scroll_delta, 5, CONFIG.grip.distance) -- Add scroll_delta to distance
         scroll_delta = 0 -- Reset scroll_delta each frame for fresh accumulation
@@ -338,6 +333,10 @@ local runtime = RunService.RenderStepped:Connect(function()
         local root_cf = this.root.CFrame
         
         -- Calculate new position
+        -- Use spherical coordinates here to move positions around the
+        -- root in a half-sphere, and push the target in/out originating
+        -- from the root point.
+
         local pitch_cos = math.cos(this.pitch)
         local local_dir = Vector3.new(
             pitch_cos*math.sin(this.yaw),
@@ -369,7 +368,7 @@ Humanoid.Died:Once(function()
         input_connections[i] = nil
     end
 
-    ContextActionService:UnbindAction("telepath_scroll")
+    ContextActionService:UnbindAction("telekinesis_scroll")
 
     -- Finally cleanup runtime to prevent errors
     runtime:Disconnect(); runtime = nil
