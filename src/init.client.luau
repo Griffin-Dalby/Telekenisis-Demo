@@ -33,10 +33,24 @@ local CONFIG = {
         distance = 100,
 
         -- Determines how sensitive the drag mechanic is. (rads/pixel)
-        sensitivity = .005
+        sensitivity = .005,
+
+        -- Adjusts properties of the AlignProperty constraint
+        constraint = {
+            -- Mass*Acceleration(this) to get AlignPos MaxForce
+            acceleration = 500,
+
+            -- Maximum velocity of constraint
+            max_velocity = 55,
+
+            -- Responsiveness of constraint
+            responsiveness = 15
+        }
     },
 
+    -- Configuration for debugging
     debug = {
+        -- Small items that visualize what's happening
         gizmo = {
             -- Visualizes grip AlignPos targets
             grip_targets = true
@@ -162,6 +176,11 @@ function grip.new(root: BasePart, obj: BasePart)
     align_pos.ApplyAtCenterOfMass = true
     align_pos.Attachment0 = base_att
     align_pos.Attachment1 = target_att
+
+    align_pos.MaxForce = obj.AssemblyMass*CONFIG.grip.constraint.acceleration
+    align_pos.MaxVelocity = CONFIG.grip.constraint.max_velocity
+    align_pos.Responsiveness = CONFIG.grip.constraint.acceleration
+
     align_pos.Parent = obj
 
     -- Compile grip object
