@@ -113,12 +113,6 @@ local function getAimObj()
     return aimCast.Instance -- Returns what got hit
 end
 
-local function countT(tbl)
-    local i=0
-    for _ in tbl do i+=1; end
-    return i
-end
-
 --#endregion
 
 --[[ GRIP OBJECT ]]--
@@ -146,6 +140,7 @@ type GripObject = grip_fields & grip_methods
 
 --#endregion
 
+local active_grip_count = 0
 local active_grips = {}
 local grip = {} :: {
     new: (root: BasePart, obj: BasePart) -> GripObject,
@@ -200,6 +195,7 @@ function grip.new(root: BasePart, obj: BasePart)
 
     obj:AddTag("Gripped")
     active_grips[obj] = this
+    active_grip_count += 1
     return this
 end
 
@@ -219,6 +215,7 @@ function grip:release()
 
     self.object:RemoveTag("Gripped")
     active_grips[self.object] = nil
+    active_grip_count -= 1
 end
 
 --#endregion
@@ -241,15 +238,15 @@ local scroll_delta = 0 -- Added to when scroll happens, and gets reset each time
 local actions: {[keyof<typeof(BINDS)>]: {pressed: (() -> ())?, released: (() -> ())?}} = {
     ["grip"] = { 
         pressed = function()
-            if countT(active_grips)>=CONFIG.grip.maximum then
-                return end
-
             local aim_obj = getAimObj()
             if not aim_obj then return end
+            local grip_obj = grip.get(aim_obj)
 
-            if grip.has(aim_obj) then
-                grip.get(aim_obj):release()
+            if grip_obj then
+                grip_obj:release()
             else
+                if active_grip_count>=CONFIG.grip.maximum then
+                    return end
                 grip.new(Humanoid.RootPart, aim_obj)
             end
         end
