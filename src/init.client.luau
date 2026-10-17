@@ -166,8 +166,6 @@ local highlight_pool = {}
 
 local grip = {} :: {
     new: (root: BasePart, obj: BasePart) -> GripObject,
-
-    has: (obj: BasePart) -> boolean,
     get: (obj: BasePart) -> GripObject
 } & grip_methods
 grip.__index = grip
@@ -237,8 +235,6 @@ function grip.new(root: BasePart, obj: BasePart)
 end
 
 -- Top-level methods
-function grip.has(obj: BasePart)
-    return active_grips[obj] ~= nil; end
 function grip.get(obj: BasePart)
     return active_grips[obj]; end
 
